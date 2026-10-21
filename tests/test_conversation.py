@@ -66,6 +66,49 @@ class ResolverTests(unittest.TestCase):
     def test_missing_target_not_defaulted(self):
         self.assertEqual(resolve_request('로그인이 느려요',{},KNOWN)['mode'],'clarify')
 
+    def test_pending_unknown_does_not_reuse_previous_target(self):
+        context={'last_targets':['payments-service'], 'pending':{'query':'billing-service 진단해줘','candidates':sorted(KNOWN)}}
+        r=resolve_request('그 서비스 다시 확인해줘',context,KNOWN)
+        self.assertEqual(r['mode'],'clarify')
+        self.assertNotIn('targets',r)
+    def test_negative_lookup_requests_are_not_executed(self):
+        for query in ['그 서비스 다시 확인하지 마','그 서버 조회하지 말아줘','재진단은 하지 마세요','조회 안 해도 돼','그 서비스 다시 확인하지 않아도 돼','그 서비스 재조회할 필요 없어','그만','취소해줘']:
+            with self.subTest(query=query):
+                self.assertEqual(resolve_request(query,{'last_targets':['payments-service']},KNOWN)['mode'],'cancel')
+    def test_excluded_targets_are_removed(self):
+        for query in ['payments-service 말고 cache-service 다시 확인해줘',
+                      'payments-service 대신 cache-service 진단해줘',
+                      'payments-service를 제외하고 cache-service 조회해줘',
+                      'payments-service와 auth-service 빼고 cache-service 확인해줘']:
+            with self.subTest(query=query):
+                self.assertEqual(resolve_request(query,{},KNOWN)['targets'],['cache-service'])
+    def test_exclusion_without_target_asks(self):
+        r=resolve_request('payments-service 말고 다시 확인해줘',{'last_targets':['payments-service']},KNOWN)
+        self.assertEqual(r['mode'],'clarify')
+        self.assertNotIn('payments-service',r['pending']['candidates'])
+    def test_unknown_but_excluded_target_does_not_block_valid_choice(self):
+        r=resolve_request('billing-service 말고 cache-service 진단해줘',{},KNOWN)
+        self.assertEqual(r['targets'],['cache-service'])
+    def test_explanation_is_chat_without_tool_lookup(self):
+        for query in ['그 서비스가 뭔지 설명해줘','다시 조회하지 말고 설명만 해줘']:
+            with self.subTest(query=query):
+                self.assertEqual(resolve_request(query,{'last_targets':['payments-service']},KNOWN)['mode'],'chat')
+    def test_pending_pronoun_preserves_candidate_choices(self):
+        pending={'query':'다시 확인해줘','candidates':['cache-service','auth-service']}
+        r=resolve_request('그 서비스 다시 확인해줘',{'last_targets':['payments-service'],'pending':pending},KNOWN)
+        self.assertEqual(r['mode'],'clarify')
+        self.assertEqual(r['pending']['candidates'],pending['candidates'])
+    def test_negated_both_is_not_selection(self):
+        pending={'query':'다시 확인','candidates':['payments-service','cache-service']}
+        self.assertEqual(resolve_request('둘 다 아니야',{'pending':pending},KNOWN)['mode'],'clarify')
+    def test_both_pending_choices_can_be_selected(self):
+        pending={'query':'다시 확인','candidates':['payments-service','cache-service']}
+        self.assertEqual(set(resolve_request('둘 다 다시 확인해줘',{'pending':pending},KNOWN)['targets']),set(pending['candidates']))
+    def test_explicit_replacement_during_pending(self):
+        pending={'query':'billing-service 진단','candidates':sorted(KNOWN)}
+        r=resolve_request('cache-service로 다시 확인해줘',{'last_targets':['payments-service'],'pending':pending},KNOWN)
+        self.assertEqual(r['targets'],['cache-service'])
+
 
 class StoreTests(unittest.TestCase):
     def setUp(self):
@@ -168,6 +211,38 @@ class APITests(unittest.TestCase):
         self.client=TestClient(server.app); self.client.__enter__()
         self.ask('cache-service')
         self.assertEqual(self.mcp.calls[-1],'cache-service')
+
+    def test_pending_unknown_followup_keeps_waiting(self):
+        self.ask('payments-service 장애 진단해줘')
+        self.ask('billing-service 다시 확인해줘')
+        n=len(self.mcp.calls)
+        r=self.ask('그 서비스 다시 확인해줘')
+        self.assertEqual(r['metadata']['route'],'clarify')
+        self.assertEqual(len(self.mcp.calls),n)
+        self.ask('cache-service')
+        self.assertEqual(self.mcp.calls[n:],['cache-service'])
+    def test_negative_requests_do_not_call_tool(self):
+        self.ask('payments-service 장애 진단해줘'); n=len(self.mcp.calls)
+        for query in ['그 서비스 다시 확인하지 마','다시 조회하지 말고 설명만 해줘']:
+            self.ask(query)
+            self.assertEqual(len(self.mcp.calls),n)
+    def test_excluded_service_is_not_queried(self):
+        self.ask('payments-service 장애 진단해줘'); n=len(self.mcp.calls)
+        self.ask('payments-service 말고 cache-service 다시 확인해줘')
+        self.assertEqual(self.mcp.calls[n:],['cache-service'])
+        self.assertEqual(self.client.get('/sessions/a').json()['context']['last_targets'],['cache-service'])
+    def test_cancel_clears_pending_without_erasing_history(self):
+        self.ask('payments-service 장애 진단해줘');self.ask('billing-service 진단해줘')
+        r=self.ask('취소해줘')
+        data=self.client.get('/sessions/a').json()
+        self.assertIsNone(data['context'].get('pending'))
+        self.assertEqual(data['context']['last_targets'],['payments-service'])
+        self.assertEqual(len(data['messages']),6)
+    def test_explanation_does_not_trigger_diagnosis(self):
+        self.ask('payments-service 장애 진단해줘'); n=len(self.mcp.calls)
+        r=self.ask('그 서비스가 뭔지 설명해줘')
+        self.assertEqual(r['metadata']['route'],'chat')
+        self.assertEqual(len(self.mcp.calls),n)
 
 
 if __name__=='__main__': unittest.main()

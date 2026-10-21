@@ -1,0 +1,43 @@
+{
+  "mode": "real Ollama + real MCP + SQLite",
+  "thread_id": "t-web-final-96988c5b27e746a88448d45fbd26c035",
+  "requests": [
+    {
+      "query": "payments-service 말고 cache-service 다시 확인해줘",
+      "route": "incident",
+      "targets": [
+        "cache-service"
+      ],
+      "elapsed_seconds": 28.61,
+      "reply": "1) **메모리 사용률 추세 확인**: 메모리 사용률이 6시간 이상 꾸준히 상승 중인 것으로 확인됨('memory usage climbing steadily over 6h').  \n2) **OOM 직전 대응**: 메모리 사용률 89.1%로 90% 이상에 달해, 해당 프로세스 즉시 재시작(임시 조치) 필요.  \n3) **힙 덤프 분석**: 힙 근접 경고('heap near limit')로, 힙 덤프 또는 프로파일링 도구로 누수 원인(예: 캐시 무제한 증가, 이벤트 리스너 중복 등) 확인 필요.",
+      "pass": true
+    },
+    {
+      "query": "billing-service 다시 확인해줘",
+      "route": "clarify",
+      "targets": [],
+      "elapsed_seconds": 0.01,
+      "reply": "등록되지 않은 서비스입니다: billing-service. 조회할 서비스명을 확인해 주세요.\n선택 가능: auth-service, cache-service, gateway-service, log-service, payments-service, web-01",
+      "pass": true
+    },
+    {
+      "query": "그 서비스 다시 확인해줘",
+      "route": "clarify",
+      "targets": [],
+      "elapsed_seconds": 0.01,
+      "reply": "아직 조회할 대상이 정해지지 않았어요. 서비스명을 선택해 주세요.\n선택 가능: auth-service, cache-service, gateway-service, log-service, payments-service, web-01",
+      "pass": true
+    },
+    {
+      "query": "그 서비스 다시 확인하지 마",
+      "route": "cancelled",
+      "targets": [],
+      "elapsed_seconds": 0.01,
+      "reply": "추가 조회 요청을 취소했어요. 기존 대화와 조사 기록은 유지됩니다.",
+      "pass": true
+    }
+  ],
+  "restored_messages": 8,
+  "passed": 4,
+  "total": 4
+}

@@ -148,7 +148,7 @@ const { createApp, ref, reactive, nextTick } = Vue;
 const STEP_LABELS = {
   ContextResolved: e => `이전 조사 대상 연결: ${e.targets.join(', ')} → 상태 새로 조회`,
   ClarificationNeeded: () => '대상이 불분명하여 사용자 확인 요청 · 조회하지 않음',
-  ClarificationCancelled: () => '확인 요청 취소',
+  ClarificationCancelled: () => '추가 조회 요청 취소 · 도구 호출 없음',
   PlanCreated: e => `계획 수립: 할 일 ${e.task_count}가지 (${(e.targets || []).join(', ')})`,
   GateApplied: e => e.removed_analysis_tasks ? `불필요한 작업 ${e.removed_analysis_tasks}건 제거` : null,
   TaskCompleted: e => (e.source === 'monitoring' ? `모니터링 새로 조회: ${e.target}${e.checked_at ? ' · ' + e.checked_at : ''}` : `대응 매뉴얼 조회: ${e.target}`) + (e.retries ? ' (재시도 성공)' : ''),

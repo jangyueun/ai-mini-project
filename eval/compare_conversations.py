@@ -1,5 +1,5 @@
 """같은 고정 입력으로 개선 전후를 비교. LLM/MCP는 테스트용 의존성으로 교체.
-実行例: .venv/bin/python3 eval/compare_conversations.py --root . --output eval/after.json
+실행 예: .venv/bin/python3 eval/compare_conversations.py --root . --output eval/after.json
 """
 import argparse
 import json
@@ -17,17 +17,7 @@ from fastapi.testclient import TestClient
 import server
 from agent.session_store import SqliteSessionStore
 
-class MCP:
-    def __init__(self): self.calls=[]
-    async def start(self): pass
-    async def stop(self): pass
-    async def find_prompt(self,*args): return 'ops'
-    async def get_prompt(self,*args,**kw): return '모니터링과 대응 절차를 확인하세요.'
-    async def find_resource_template(self,*args): return 'ops','runbook://incident-response/{incident_type}'
-    async def read_resource(self,*args,**kw): return '# CPU 대응\n1. 상태 확인\n2. 로그 확인 권장\n3. 추가 조사'
-    async def call_tool(self,name,arguments):
-        self.calls.append(arguments['system_name'])
-        return {'system_name':arguments['system_name'],'status':'degraded','cpu_percent':70+len(self.calls),'memory_percent':50,'alerts':['CPU high']}
+from fixed_mcp import MonitoringMCP as MCP
 
 rows=[]
 with tempfile.TemporaryDirectory() as tmp:

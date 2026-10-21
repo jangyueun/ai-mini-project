@@ -1,0 +1,336 @@
+{
+  "mode": "fixed boundary scenarios; fake LLM + recording MCP; real graph/API/SQLite",
+  "dataset_sha256": "bcc237bc40ab111936dadd078db91a11ef58b75763c0d1f3ed0acb6f92523306",
+  "passed": 3,
+  "total": 24,
+  "cases": [
+    {
+      "case": "조회 금지·취소 1",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "그 서비스 다시 확인하지 마",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "조회 금지·취소 2",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "그 서버 조회하지 말아줘",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "조회 금지·취소 3",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "재진단은 하지 마세요",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "incident",
+      "actual_targets": [
+        "auth-service",
+        "web-01"
+      ],
+      "pass": false
+    },
+    {
+      "case": "조회 금지·취소 4",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "조회 안 해도 돼",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "조회 금지·취소 5",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "그만",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "조회 금지·취소 6",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "취소해줘",
+      "expected_route": "cancelled",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "제외·대체 1",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "payments-service 말고 cache-service 다시 확인해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "제외·대체 2",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "payments-service 대신 cache-service 진단해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "incident",
+      "actual_targets": [
+        "web-01",
+        "cache-service",
+        "payments-service"
+      ],
+      "pass": false
+    },
+    {
+      "case": "제외·대체 3",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "payments-service를 제외하고 cache-service 조회해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "제외·대체 4",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "payments-service와 auth-service 빼고 cache-service 확인해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "제외·대체 5",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "billing-service 말고 cache-service 진단해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "incident",
+      "actual_targets": [
+        "billing-service",
+        "cache-service",
+        "web-01"
+      ],
+      "pass": false
+    },
+    {
+      "case": "제외 후 대상 누락",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "payments-service 말고 다시 확인해줘",
+      "expected_route": "clarify",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "미등록 대상 확인 대기 중 대명사",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘",
+        "billing-service 다시 확인해줘"
+      ],
+      "query": "그 서비스 다시 확인해줘",
+      "expected_route": "clarify",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "미등록 대상 확인 후 선택",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘",
+        "billing-service 다시 확인해줘"
+      ],
+      "query": "cache-service",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "복수 대상 확인 대기 중 대명사",
+      "setup": [
+        "payments-service cache-service 장애 진단해줘",
+        "그 서비스 다시 확인해줘"
+      ],
+      "query": "그 서비스 다시 확인해줘",
+      "expected_route": "clarify",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "복수 대상 확인 후 선택",
+      "setup": [
+        "payments-service cache-service 장애 진단해줘",
+        "그 서비스 다시 확인해줘"
+      ],
+      "query": "cache-service",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "설명·요약 1",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "그 서비스가 뭔지 설명해줘",
+      "expected_route": "chat",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": true
+    },
+    {
+      "case": "설명·요약 2",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "다시 조회하지 말고 설명만 해줘",
+      "expected_route": "chat",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": true
+    },
+    {
+      "case": "설명·요약 3",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "이전 결과를 요약해줘",
+      "expected_route": "chat",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": true
+    },
+    {
+      "case": "복수 후보 전체 선택",
+      "setup": [
+        "payments-service cache-service 장애 진단해줘",
+        "그 서비스 다시 확인해줘"
+      ],
+      "query": "둘 다 다시 확인해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "payments-service",
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "복수 후보 모두 거절",
+      "setup": [
+        "payments-service cache-service 장애 진단해줘",
+        "그 서비스 다시 확인해줘"
+      ],
+      "query": "둘 다 아니야",
+      "expected_route": "clarify",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "새 대화 재조회",
+      "setup": [],
+      "query": "그 서비스 다시 확인해줘",
+      "expected_route": "clarify",
+      "expected_targets": [],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    },
+    {
+      "case": "명시적 대상 변경",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘"
+      ],
+      "query": "cache-service 다시 진단해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "incident",
+      "actual_targets": [
+        "cache-service",
+        "web-01"
+      ],
+      "pass": false
+    },
+    {
+      "case": "확인 대기 중 새 대상 명시",
+      "setup": [
+        "payments-service CPU 급증 원인 진단해줘",
+        "billing-service 다시 확인해줘"
+      ],
+      "query": "cache-service로 다시 확인해줘",
+      "expected_route": "incident",
+      "expected_targets": [
+        "cache-service"
+      ],
+      "actual_route": "chat",
+      "actual_targets": [],
+      "pass": false
+    }
+  ]
+}

@@ -54,6 +54,7 @@ class AgentState(TypedDict, total=False):
     context: dict
     resolution_targets: list[str]
     forced_incident: bool
+    forced_chat: bool
     pending_context: dict | None
     clarification: bool
     thread_id: str
@@ -87,19 +88,23 @@ async def resolve_context_node(state: AgentState, deps: SupervisorDeps) -> dict:
     if mode in {"clarify", "cancel"}:
         events.append({"type": "ClarificationNeeded" if mode == "clarify" else "ClarificationCancelled",
                        "candidates": (resolution.get("pending") or {}).get("candidates", [])})
-        return {"final": resolution["reply"], "route": "clarify", "clarification": True,
+        return {"final": resolution["reply"], "route": "cancelled" if mode == "cancel" else "clarify", "clarification": True,
                 "pending_context": resolution["pending"], "events": events}
     if resolution.get("inherited"):
         events.append({"type": "ContextResolved", "targets": resolution["targets"], "fresh_lookup": True})
-    return {"effective_query": resolution.get("query", state["query"]),
+    updates = {"pending_context": resolution["pending"]} if "pending" in resolution else {}
+    return {**updates, "effective_query": resolution.get("query", state["query"]),
             "resolution_targets": resolution.get("targets", []),
-            "forced_incident": mode == "incident", "clarification": False, "events": events}
+            "forced_incident": mode == "incident", "forced_chat": mode == "chat",
+            "clarification": False, "events": events}
 
 
 @traceable(name="route_node")
 async def route_node(state: AgentState, deps: SupervisorDeps) -> dict:
     """Wave 5 — 모든 쿼리가 무거운 파이프라인을 탈 필요는 없다."""
-    if state.get("forced_incident"):
+    if state.get("forced_chat"):
+        result, usage = {"route": "chat", "needs_analysis": False}, {"usd": 0}
+    elif state.get("forced_incident"):
         result, usage = {"route": "incident", "needs_analysis": False}, {"usd": 0}
     else:
         result, usage = deps.fast_llm.route(state.get("effective_query", state["query"]))
@@ -135,7 +140,7 @@ async def plan_node(state: AgentState, deps: SupervisorDeps) -> dict:
     prompt_server = await deps.mcp.find_prompt("incident_analysis_prompt")
     procedure = await deps.mcp.get_prompt(
         "incident_analysis_prompt",
-        {"system_name": _extract_system_name(query), "symptom": query},
+        {"system_name": (state.get("resolution_targets") or [_extract_system_name(query)])[0], "symptom": query},
         server=prompt_server,
     )
     result, usage = deps.fast_llm.plan(query, procedure)

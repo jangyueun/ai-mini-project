@@ -8,6 +8,7 @@ SKALA AI Mini-Project의 제공된 기본 프로그램을 바탕으로 대화 �
 - 새로고침 후 대화·처리 단계 복원, 이전 대화 선택, 새 대화 시작, 현재 대화만 삭제
 - 직전 조사 대상에 대한 후속 요청 연결, 복수·미등록 대상 확인
 - 재진단 시 모니터링 Tool 신규 호출 (과거 수치 재사용 안 함)
+- 조회 금지·취소·설명 요청 구분, 제외한 서비스 조회 차단, 확인 대기 중 과거 대상 재사용 차단
 - 단위·API 통합 테스트와 개선 전후 비교, 브라우저 화면 검증
 
 구현 설명·평가 조건·한계·화면 캡처: [2일차 구현 기록](doc/day2-implementation.md)
@@ -54,3 +55,5 @@ bash sh/run_frontend.sh
 ```
 
 외부 API를 호출하지 않고 테스트용 의존성을 주입합니다. 실제 Ollama 모델 검증과 고정 입력 비교 결과는 `eval/`에 구분해 기록합니다.
+
+추가 경계 검증: `eval/check_boundaries.py`와 `eval/boundary_cases.json`으로 24개 고정 시나리오를 평가합니다. 결과는 `eval/boundary_before.json`, `eval/boundary_after.json`에 기록하며 자유로운 자연어 전체의 정확도로 일반화하지 않습니다.
