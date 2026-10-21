@@ -23,6 +23,16 @@
     font-weight: 600; font-size: 15px;
   }
   header span { color: #8b8bd8; font-weight: 400; font-size: 13px; margin-left: 8px; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 20px; background:#262638; }
+  .toolbar button { padding:8px 12px; font-size:13px; }
+  .toolbar .danger { background:#563945; }
+  .toolbar select { max-width:300px; padding:8px; background:#1e1e2e; color:#e2e2f0; border:1px solid #555; border-radius:6px; }
+  .notice { padding:9px 20px; font-size:13px; color:#c4c4e7; background:#222235; }
+  .empty { margin:auto; max-width:600px; line-height:1.9; color:#b4b4cf; }
+  .context { padding:6px 20px; color:#b4dfbd; font-size:12px; }
+  .candidates { display:flex; flex-wrap:wrap; gap:6px; padding:6px 20px; }
+  .candidates button { padding:7px 10px; }
+  @media(max-width:600px) { .bubble,.steps,.prompt-box { max-width:95%; } header span { display:block; margin:6px 0 0; } }
   #log {
     flex: 1; min-height: 0;   /* flex 자식 기본 최소높이(콘텐츠 크기)를 풀어줘야
                                  내용이 길어져도 바디가 안 늘어나고 여기서만 스크롤됨 */
@@ -80,7 +90,26 @@
 <body>
 <div id="app">
   <header>운영 인시던트 대응 에이전트 <span>{{ backendLabel }}</span></header>
+  <div class="toolbar">
+    <select aria-label="대화 선택" :value="thread" @change="switchThread($event.target.value)" :disabled="sending || restoring">
+      <option v-for="session in sessions" :key="session.id" :value="session.id">{{ session.title }}</option>
+    </select>
+    <button @click="newConversation" :disabled="sending || restoring">＋ 새 대화 시작</button>
+    <button class="danger" @click="deleteConversation" :disabled="sending || restoring || !log.length">현재 대화 기록 삭제</button>
+  </div>
+  <div class="notice" role="status">{{ notice }}</div>
+  <div class="context" v-if="targets.length">최근 조사 대상: {{ targets.join(', ') }} · 재진단 시 상태를 새로 조회합니다.</div>
+  <div class="candidates" v-if="candidates.length">
+    <button v-for="name in candidates" :key="name" @click="sendChoice(name)" :disabled="sending || restoring">{{ name }}</button>
+  </div>
   <div id="log" ref="logEl">
+    <div class="empty" v-if="!log.length && !restoring">
+      <strong>진단 대화를 이어서 사용하세요.</strong><br>
+      ① payments-service CPU 급증 원인 진단해줘<br>
+      ② 새로고침해도 대화가 복원됩니다.<br>
+      ③ “그 서비스 다시 확인해줘”로 최신 상태를 조회하세요.<br>
+      <small>현재 모니터링은 실습용 샘플 데이터입니다. 새 대화는 이전 대상을 이어받지 않습니다.</small>
+    </div>
     <template v-for="item in log" :key="item.id">
       <div v-if="item.kind === 'user'" class="row user">
         <div class="bubble">{{ item.text }}</div>
@@ -103,108 +132,137 @@
   <form @submit.prevent="onSubmit">
     <input
       v-model="input"
+      :disabled="sending || restoring"
+      maxlength="4000"
+      aria-label="질문"
       autocomplete="off"
       placeholder="예: auth-service 로그인 응답이 느려졌어요. 원인 확인해주세요"
     />
-    <button type="submit" :disabled="sending">보내기</button>
+    <button type="submit" :disabled="sending || restoring">보내기</button>
   </form>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script>
 const { createApp, ref, reactive, nextTick } = Vue;
-
 const STEP_LABELS = {
-  PlanCreated: e => `계획 수립: 할 일 ${e.task_count}가지${e.targets?.length ? ` (시스템: ${e.targets.join(', ')})` : ''}`,
+  ContextResolved: e => `이전 조사 대상 연결: ${e.targets.join(', ')} → 상태 새로 조회`,
+  ClarificationNeeded: () => '대상이 불분명하여 사용자 확인 요청 · 조회하지 않음',
+  ClarificationCancelled: () => '확인 요청 취소',
+  PlanCreated: e => `계획 수립: 할 일 ${e.task_count}가지 (${(e.targets || []).join(', ')})`,
   GateApplied: e => e.removed_analysis_tasks ? `불필요한 작업 ${e.removed_analysis_tasks}건 제거` : null,
-  TaskCompleted: e => (e.source === 'monitoring'
-      ? `모니터링 지표 확인 (시스템: ${e.target})`
-      : `대응 매뉴얼(runbook) 조회 (장애유형: ${e.target})`) + (e.retries ? ' (재시도 성공)' : ''),
-  ReplanCheck: e => e.is_sufficient ? null : `정보 부족 → 장애유형 "${e.target}"로 추가 조사`,
+  TaskCompleted: e => (e.source === 'monitoring' ? `모니터링 새로 조회: ${e.target}${e.checked_at ? ' · ' + e.checked_at : ''}` : `대응 매뉴얼 조회: ${e.target}`) + (e.retries ? ' (재시도 성공)' : ''),
+  ReplanCheck: e => e.is_sufficient ? null : `정보 부족 → ${e.target} 매뉴얼 추가 조사`,
   DraftWritten: e => `답변 초안 작성 (시도 ${e.attempt})`,
-  Validation: e => e.verdict === '합격' ? '검수 통과' : '검수 반려 → 다시 작성',
+  Validation: e => e.verdict.startsWith('합격') ? '검수 통과 (기본 형식 검사)' : '검수 반려 → 다시 작성',
   Finalize: () => '최종 답변 완성',
 };
-
 createApp({
   setup() {
-    const backendLabel = ref('all_total_vue');
-    const log = ref([]);
-    const input = ref('');
-    const sending = ref(false);
-    const logEl = ref(null);
-    const thread = 't-web-' + Math.random().toString(36).slice(2, 8);
-    let nextId = 0;
-
-    fetch('/health').then(r => r.json()).then(h => {
-      backendLabel.value = `${h.llm_backend} 실모델(${h.fast_llm}/${h.quality_llm}) · all_total_vue`;
-    }).catch(() => {});
-
-    async function scrollToBottom() {
-      await nextTick();
-      if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight;
+    const CURRENT_KEY = 'incident-agent.current.v1';
+    const LIST_KEY = 'incident-agent.sessions.v1';
+    const backendLabel = ref('서버 확인 중');
+    const log = ref([]), input = ref(''), sending = ref(false), restoring = ref(false), logEl = ref(null);
+    const thread = ref(''), sessions = ref([]), targets = ref([]), candidates = ref([]);
+    const notice = ref('저장된 대화를 확인하는 중입니다.');
+    let nextId = 0, storageAvailable = true;
+    const newId = () => 't-web-' + crypto.randomUUID();
+    try {
+      const value = JSON.parse(localStorage.getItem(LIST_KEY) || '[]');
+      sessions.value = Array.isArray(value) ? value.filter(x => /^[a-zA-Z0-9_-]{1,100}$/.test(x.id) && typeof x.title === 'string') : [];
+      const saved = localStorage.getItem(CURRENT_KEY);
+      thread.value = saved && /^[a-zA-Z0-9_-]{1,100}$/.test(saved) ? saved : newId();
+    } catch { storageAvailable = false; thread.value = newId(); }
+    if (!sessions.value.some(s => s.id === thread.value)) sessions.value.push({ id: thread.value, title: '새 대화' });
+    function saveSelection() {
+      try { localStorage.setItem(CURRENT_KEY, thread.value); localStorage.setItem(LIST_KEY, JSON.stringify(sessions.value)); }
+      catch { storageAvailable = false; }
     }
-
+    saveSelection();
+    async function scrollToBottom() { await nextTick(); if(logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight; }
+    function appendMetadata(meta) {
+      const steps = (meta.events || []).map(e => STEP_LABELS[e.type]?.(e)).filter(Boolean);
+      if(steps.length) log.value.push({ id: nextId++, kind: 'steps', steps });
+    }
+    async function restore() {
+      restoring.value = true;
+      log.value = []; targets.value = []; candidates.value = [];
+      try {
+        const r = await fetch(`/sessions/${encodeURIComponent(thread.value)}`, { cache:'no-store' });
+        if(!r.ok) throw Error('restore');
+        const data = await r.json();
+        log.value = [];
+        for(const m of data.messages) {
+          if(m.role === 'assistant') appendMetadata(m.metadata || {});
+          log.value.push({id: nextId++, kind: m.role === 'user' ? 'user' : 'agent', text:m.content});
+          if(m.metadata?.prompt) log.value.push({id:nextId++, kind:'prompt',text:m.metadata.prompt});
+        }
+        targets.value = data.context.last_targets || [];
+        candidates.value = data.context.pending?.candidates || [];
+        notice.value = data.busy ? '이 대화는 처리 중입니다. 완료된 대화만 복원했어요. 잠시 후 다시 불러와 주세요.' :
+          data.messages.length ? `완료된 메시지 ${data.messages.length}개를 DB에서 복원했어요. (최근 최대 200개)` : '새 대화입니다. 이전 대화의 조사 대상은 사용하지 않아요.';
+        if(!storageAvailable) notice.value += ' 브라우저 저장이 차단되어 새로고침 후 대화 번호 유지가 어려울 수 있어요.';
+      } catch { notice.value = '대화를 불러오지 못했어요. 백엔드 실행 후 페이지를 새로고침해 주세요.'; }
+      finally { restoring.value = false; scrollToBottom(); }
+    }
+    async function switchThread(id) {
+      if(sending.value || restoring.value) return;
+      thread.value=id; saveSelection(); await restore();
+    }
+    async function newConversation() {
+      if(sending.value || restoring.value) return;
+      const id=newId(); sessions.value.push({id,title:'새 대화'}); await switchThread(id);
+    }
+    async function deleteConversation() {
+      if(!confirm('현재 대화의 메시지와 조사 대상 기록을 삭제할까요? 다른 대화는 삭제하지 않습니다.')) return;
+      restoring.value=true;
+      try {
+        const r=await fetch(`/sessions/${encodeURIComponent(thread.value)}`, {method:'DELETE'});
+        if(!r.ok) throw Error('delete');
+        log.value=[]; targets.value=[]; candidates.value=[];
+        const session=sessions.value.find(s=>s.id===thread.value); if(session) session.title='새 대화'; saveSelection();
+        notice.value='현재 대화 기록과 조사 대상을 삭제했어요.';
+      } catch { notice.value='삭제하지 못했어요. 생성 중인 답변이 있다면 완료 후 다시 시도해 주세요.'; }
+      finally { restoring.value=false; }
+    }
+    function sendChoice(name) { input.value=name; onSubmit(); }
     function onSubmit() {
-      const text = input.value.trim();
-      if (!text) return;
-
-      log.value.push({ id: nextId++, kind: 'user', text });
-      input.value = '';
-      sending.value = true;
-      scrollToBottom();
-
-      const stepsItem = reactive({ id: nextId++, kind: 'steps', steps: [] });
-      log.value.push(stepsItem);
-      scrollToBottom();
-
-      const url = `/chat/stream?message=${encodeURIComponent(text)}&thread_id=${encodeURIComponent(thread)}`;
-      const es = new EventSource(url);
-      let streamItem = null;
-      let streamAttempt = null;   // write_node 재작성(attempt 증가) 시 새 말풍선으로 끊는다
-
-      es.onmessage = (event) => {
-        if (event.data === '[DONE]') { es.close(); sending.value = false; return; }
-        let e;
-        try { e = JSON.parse(event.data); } catch { return; }
-
-        if (e.type === 'AnswerToken') {
-          if (!streamItem || streamAttempt !== e.attempt) {
-            streamItem = reactive({ id: nextId++, kind: 'agent', text: '' });
-            log.value.push(streamItem);
-            streamAttempt = e.attempt;
-          }
-          streamItem.text += e.delta;
-          scrollToBottom();
+      const text=input.value.trim(); if(!text || sending.value || restoring.value) return;
+      const session=sessions.value.find(s=>s.id===thread.value);
+      if(session && session.title==='새 대화') { session.title=text.slice(0,35); saveSelection(); }
+      log.value.push({id:nextId++,kind:'user',text}); input.value=''; sending.value=true; candidates.value=[];
+      notice.value='답변을 생성하고 있어요. 완료된 답변과 조사 대상은 함께 저장됩니다.';
+      const stepsItem=reactive({id:nextId++,kind:'steps',steps:[]}); log.value.push(stepsItem); scrollToBottom();
+      const es=new EventSource(`/chat/stream?message=${encodeURIComponent(text)}&thread_id=${encodeURIComponent(thread.value)}`);
+      let streamItem=null, streamAttempt=null, saved=false, failed=false;
+      es.onmessage=async event=>{
+        if(event.data==='[DONE]') {
+          es.close(); sending.value=false;
+          if(saved) await restore();
           return;
         }
-
-        if (e.type === 'FinalAnswer') {
-          if (!streamItem) {
-            streamItem = reactive({ id: nextId++, kind: 'agent', text: '' });
-            log.value.push(streamItem);
-          }
-          streamItem.text = e.reply;   // 토큰 합산 결과와 서버의 최종 텍스트를 일치시킨다
-          if (e.prompt) log.value.push({ id: nextId++, kind: 'prompt', text: e.prompt });
-          streamItem = null;
-          streamAttempt = null;
-          scrollToBottom();
-          return;
+        let e; try { e=JSON.parse(event.data); } catch { return; }
+        if(e.type==='StreamError') {failed=true; notice.value=e.message; return;}
+        if(e.type==='AnswerToken') {
+          if(!streamItem || streamAttempt!==e.attempt) {streamItem=reactive({id:nextId++,kind:'agent',text:''});log.value.push(streamItem);streamAttempt=e.attempt;}
+          streamItem.text+=e.delta; scrollToBottom(); return;
         }
-
-        const fn = STEP_LABELS[e.type];
-        if (!fn) return;
-        const label = fn(e);
-        if (!label) return;
-        stepsItem.steps.push(label);
-        scrollToBottom();
+        if(e.type==='FinalAnswer') {
+          saved=e.saved===true;
+          if(!streamItem) {streamItem=reactive({id:nextId++,kind:'agent',text:''});log.value.push(streamItem);}
+          streamItem.text=e.reply; scrollToBottom(); return;
+        }
+        const label=STEP_LABELS[e.type]?.(e); if(label) {stepsItem.steps.push(label);scrollToBottom();}
       };
-
-      es.onerror = () => { es.close(); sending.value = false; };
+      es.onerror=()=>{
+        es.close(); sending.value=false;
+        if(!failed) notice.value='연결이 끊겼어요. 완료되지 않은 요청은 저장되지 않을 수 있어요. 새로고침해 저장된 기록을 확인해 주세요.';
+      };
     }
-
-    return { backendLabel, log, input, sending, logEl, onSubmit };
-  },
+    fetch('/health').then(r=>r.json()).then(h=>{backendLabel.value=`${h.llm_backend} · ${h.fast_llm} / ${h.quality_llm}`;}).catch(()=>{backendLabel.value='백엔드 연결 확인 필요';});
+    restore();
+    return {backendLabel,log,input,sending,restoring,logEl,thread,sessions,targets,candidates,notice,onSubmit,switchThread,newConversation,deleteConversation,sendChoice};
+  }
 }).mount('#app');
 </script>
 </body>

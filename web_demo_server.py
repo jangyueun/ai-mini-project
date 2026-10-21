@@ -12,6 +12,7 @@ server.py는 평소처럼(fake/ollama/openai 아무 백엔드로나) 8100에 미
 실행:
     python3 web_demo_server.py        # http://localhost:8600 에서 채팅 화면 오픈
 """
+import os
 from pathlib import Path
 
 import httpx
@@ -19,7 +20,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-BACKEND = "http://127.0.0.1:8100"
+BACKEND = os.environ.get("AGENT_BACKEND_URL", "http://127.0.0.1:8100")
 HERE = Path(__file__).parent
 
 app = FastAPI()
@@ -35,6 +36,13 @@ async def proxy_health():
     async with httpx.AsyncClient(timeout=10.0) as client:
         r = await client.get(f"{BACKEND}/health")
     return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.api_route("/sessions/{thread_id}", methods=["GET", "DELETE"])
+async def proxy_session(thread_id: str, req: Request):
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.request(req.method, f"{BACKEND}/sessions/{thread_id}")
+    return JSONResponse(r.json(), status_code=r.status_code, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/chat")

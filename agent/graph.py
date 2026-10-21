@@ -19,6 +19,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 from langsmith import traceable
 
+from .conversation import resolve_request
 from .deps import SupervisorDeps
 from .retry import with_retry
 
@@ -49,6 +50,12 @@ def _extract_system_name(query: str) -> str:
 
 class AgentState(TypedDict, total=False):
     query: str
+    effective_query: str
+    context: dict
+    resolution_targets: list[str]
+    forced_incident: bool
+    pending_context: dict | None
+    clarification: bool
     thread_id: str
     history: list[dict]
     route: str
@@ -72,10 +79,30 @@ def _cost(state: AgentState, usage: dict) -> float:
     return round(state.get("cost_usd", 0.0) + usage["usd"], 6)
 
 
+@traceable(name="resolve_context_node")
+async def resolve_context_node(state: AgentState, deps: SupervisorDeps) -> dict:
+    resolution = resolve_request(state["query"], state.get("context", {}), KNOWN_SYSTEMS)
+    mode = resolution["mode"]
+    events = list(state.get("events", []))
+    if mode in {"clarify", "cancel"}:
+        events.append({"type": "ClarificationNeeded" if mode == "clarify" else "ClarificationCancelled",
+                       "candidates": (resolution.get("pending") or {}).get("candidates", [])})
+        return {"final": resolution["reply"], "route": "clarify", "clarification": True,
+                "pending_context": resolution["pending"], "events": events}
+    if resolution.get("inherited"):
+        events.append({"type": "ContextResolved", "targets": resolution["targets"], "fresh_lookup": True})
+    return {"effective_query": resolution.get("query", state["query"]),
+            "resolution_targets": resolution.get("targets", []),
+            "forced_incident": mode == "incident", "clarification": False, "events": events}
+
+
 @traceable(name="route_node")
 async def route_node(state: AgentState, deps: SupervisorDeps) -> dict:
     """Wave 5 — 모든 쿼리가 무거운 파이프라인을 탈 필요는 없다."""
-    result, usage = deps.fast_llm.route(state["query"])
+    if state.get("forced_incident"):
+        result, usage = {"route": "incident", "needs_analysis": False}, {"usd": 0}
+    else:
+        result, usage = deps.fast_llm.route(state.get("effective_query", state["query"]))
     event = {"type": "RouteDecided", "route": result["route"]}
     return {"route": result["route"], "needs_analysis": result["needs_analysis"],
             "cost_usd": _cost(state, usage),
@@ -104,13 +131,20 @@ async def plan_node(state: AgentState, deps: SupervisorDeps) -> dict:
 
     resource와 마찬가지로 이름을 어느 서버가 들고 있는지 미리 가정하지 않고,
     find_prompt()로 연결된 서버들을 먼저 조회해 찾은 뒤에만 get_prompt를 보낸다."""
+    query = state.get("effective_query", state["query"])
     prompt_server = await deps.mcp.find_prompt("incident_analysis_prompt")
     procedure = await deps.mcp.get_prompt(
         "incident_analysis_prompt",
-        {"system_name": _extract_system_name(state["query"]), "symptom": state["query"]},
+        {"system_name": _extract_system_name(query), "symptom": query},
         server=prompt_server,
     )
-    result, usage = deps.fast_llm.plan(state["query"], procedure)
+    result, usage = deps.fast_llm.plan(query, procedure)
+    # 대상은 사용자 선택/저장 맥락이 권위다. 모델의 누락·과잉 조사로 덮어쓰지 않는다.
+    if state.get("resolution_targets"):
+        research = [{"id": f"task-{i}", "agent": "research", "kind": "monitoring",
+                     "target": target, "status": "pending"}
+                    for i, target in enumerate(state["resolution_targets"])]
+        result["tasks"] = research + [t for t in result["tasks"] if t["agent"] == "analysis"]
     targets = [t["target"] for t in result["tasks"]
                if t["agent"] == "research" and t.get("target")]
     event = {"type": "PlanCreated", "task_count": len(result["tasks"]),
@@ -181,7 +215,8 @@ async def research_node(state: AgentState, deps: SupervisorDeps) -> dict:
         retry_total += r["retries"]
         events.append({"type": "TaskCompleted", "id": new_tasks[r["idx"]]["id"],
                        "source": r["source"], "target": new_tasks[r["idx"]]["target"],
-                       "retries": r["retries"]})
+                       "retries": r["retries"],
+                       "checked_at": r["data"].get("last_checked") if r["source"] == "monitoring" else None})
     return {"tasks": new_tasks, "collected": collected, "retry_count": retry_total,
             "parallel_elapsed": elapsed, "events": events}
 
@@ -261,7 +296,7 @@ async def write_node(state: AgentState, deps: SupervisorDeps) -> dict:
     attempt = state.get("validation_attempts", 0) + 1
     writer = get_stream_writer()
     draft, usage = await deps.quality_llm.write(
-        state["query"], state.get("collected", []),
+        state.get("effective_query", state["query"]), state.get("collected", []),
         attempt, state.get("validation_feedback"),
         on_token=lambda piece: writer(
             {"type": "AnswerToken", "attempt": attempt, "delta": piece}))
@@ -310,6 +345,7 @@ def _after_validate(state: AgentState) -> str:
 def build_graph(deps: SupervisorDeps):
     g = StateGraph(AgentState)
     node = lambda fn: partial(fn, deps=deps)   # Wave 13 — 명시적 의존성 주입
+    g.add_node("resolve_context", node(resolve_context_node))
     g.add_node("route", node(route_node))
     g.add_node("chat_answer", node(chat_answer_node))
     g.add_node("plan", node(plan_node))
@@ -321,7 +357,10 @@ def build_graph(deps: SupervisorDeps):
     g.add_node("validate", node(validate_node))
     g.add_node("finalize", node(finalize_node))
 
-    g.set_entry_point("route")
+    g.set_entry_point("resolve_context")
+    g.add_conditional_edges("resolve_context",
+        lambda state: "done" if state.get("clarification") else "route",
+        {"done": END, "route": "route"})
     g.add_conditional_edges("route", _after_route,
                             {"chat_answer": "chat_answer", "plan": "plan"})
     g.add_edge("chat_answer", END)

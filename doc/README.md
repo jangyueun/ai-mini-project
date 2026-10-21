@@ -1,3 +1,5 @@
+> 이 문서는 제공된 기본 프로그램 설명입니다. 이번 프로젝트의 변경 사항은 [2일차 구현 기록](day2-implementation.md), 현재 실행 방법은 [프로젝트 README](../README.md)를 참고하세요.
+
 # all_total_vue — 운영 인시던트 대응 에이전트 (Vue 프론트엔드 버전)
 
 `all_total`과 백엔드(server.py, agent/, mcp_server.py 등)는 완전히 동일하고, 브라우저

@@ -8,6 +8,7 @@
 - Wave 14 : SUPERVISOR_VERSION(v1/v2) 환경변수로 legacy/신형 파이프라인 즉시 전환
 - LangSmith: 요청당 chat_request 루트 run 아래로 노드·LLM·MCP 호출이 계층 기록됨
 """
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -16,11 +17,11 @@ from dotenv import load_dotenv
 
 load_dotenv()   # LANGCHAIN_TRACING_V2 / API_KEY / PROJECT — import보다 먼저
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent.deps import SupervisorDeps
 from agent.fake_llm import FastLLM, QualityLLM
@@ -33,8 +34,8 @@ CREATION_COUNT = 0   # Wave 1 — 프로세스 내 Agent 번들 생성 횟수 (�
 
 
 class ChatRequest(BaseModel):   # Wave 1 — Pydantic 요청 검증
-    message: str
-    thread_id: str = "default"
+    message: str = Field(min_length=1, max_length=4000)
+    thread_id: str = Field(default="default", min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
 
 
 def _build_llms():
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
     app.state.deps = deps
     app.state.graph = build_graph(deps) if deps.version == "v2" else None
     app.state.instance_id = id(deps)
+    app.state.session_locks = {}
     yield
     await mcp.stop()
     deps.session_store.close()
@@ -122,74 +124,116 @@ def _metadata(result: dict, run_id: str | None) -> dict:
     }
 
 
+def _session_lock(thread_id: str) -> asyncio.Lock:
+    return app.state.session_locks.setdefault(thread_id, asyncio.Lock())
+
+
+def _validate_thread(thread_id: str) -> None:
+    # GET/DELETE도 POST와 같은 ID 규칙 사용.
+    ChatRequest(message="check", thread_id=thread_id)
+
+
+def _input_state(message: str, thread_id: str) -> dict:
+    store = app.state.deps.session_store
+    return {"query": message, "thread_id": thread_id, "history": store.load(thread_id),
+            "context": store.context(thread_id), "events": [], "cost_usd": 0.0}
+
+
+@app.get("/sessions/{thread_id}")
+async def get_session(thread_id: str):
+    try:
+        _validate_thread(thread_id)
+    except ValueError:
+        raise HTTPException(422, "대화 ID 형식이 올바르지 않습니다.")
+    store = app.state.deps.session_store
+    return {"thread_id": thread_id, "messages": store.messages(thread_id),
+            "context": store.context(thread_id), "busy": _session_lock(thread_id).locked()}
+
+
+@app.delete("/sessions/{thread_id}")
+async def delete_session(thread_id: str):
+    try:
+        _validate_thread(thread_id)
+    except ValueError:
+        raise HTTPException(422, "대화 ID 형식이 올바르지 않습니다.")
+    lock = _session_lock(thread_id)
+    if lock.locked():
+        raise HTTPException(409, "답변 생성이 끝난 뒤 삭제해 주세요.")
+    async with lock:
+        app.state.deps.session_store.clear(thread_id)
+    return {"deleted": True, "thread_id": thread_id}
+
+
 @traceable(name="chat_request")
 async def _handle_chat(message: str, thread_id: str) -> tuple[dict, str | None]:
     deps = app.state.deps
-    history = deps.session_store.load(thread_id)   # Wave 12
+    initial = _input_state(message, thread_id)
     if deps.version == "v2":
-        result = await app.state.graph.ainvoke(
-            {"query": message, "thread_id": thread_id, "history": history,
-             "events": [], "cost_usd": 0.0})
+        result = await app.state.graph.ainvoke(initial)
     else:
-        result = await run_v1(deps, message, thread_id, history)   # Wave 14
-    deps.session_store.append(thread_id, "user", message)
-    deps.session_store.append(thread_id, "assistant", result["final"])
+        result = await run_v1(deps, message, thread_id, initial["history"])
+    deps.session_store.save_turn(thread_id, message, result)
     rt = get_current_run_tree()
     return result, (str(rt.id) if rt else None)
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    result, run_id = await _handle_chat(req.message, req.thread_id)
+    lock = _session_lock(req.thread_id)
+    if lock.locked():
+        raise HTTPException(409, "같은 대화의 이전 답변을 기다려 주세요.")
+    async with lock:
+        result, run_id = await _handle_chat(req.message, req.thread_id)
     return {"reply": result["final"], "events": result.get("events", []),
             "metadata": _metadata(result, run_id)}
 
 
 @app.get("/chat/stream")
 async def chat_stream(message: str, thread_id: str = "default"):
-    """Wave 3 — 그래프의 노드별 진행 상황을 SSE로 스트리밍.
+    try:
+        req = ChatRequest(message=message.strip(), thread_id=thread_id)
+    except ValueError:
+        raise HTTPException(422, "질문 또는 대화 ID 형식이 올바르지 않습니다.")
+    lock = _session_lock(thread_id)
+    if lock.locked():
+        raise HTTPException(409, "같은 대화의 이전 답변을 기다려 주세요.")
 
-    이벤트마다 'data: {json}\\n\\n' 형태로 내려보내고 마지막에 data: [DONE] 센티널을
-    보낸다 — 프론트엔드는 \\n\\n 경계로 이벤트를 분리해 파싱해야 한다(Wave 3b).
-    """
-    deps = app.state.deps
+    def event(data):
+        return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     async def gen():
-        history = deps.session_store.load(thread_id)
-        if deps.version != "v2":
-            result = await run_v1(deps, message, thread_id, history)
-            for ev in result["events"]:
-                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'FinalAnswer', 'reply': result['final']}, ensure_ascii=False)}\n\n"
-        else:
-            seen = 0
-            final = ""
-            last_prompt = None   # finalize까지 살아남은 최종 write/chat 호출의 실제 프롬프트
-            # stream_mode를 리스트로 주면 (mode, payload) 튜플이 나온다 — "updates"는
-            # 노드가 끝날 때마다의 상태 델타, "custom"은 write_node/chat_answer_node가
-            # get_stream_writer()로 실행 중에 즉시 흘려보내는 토큰(AnswerToken) 이벤트다.
-            async for mode, payload in app.state.graph.astream(
-                    {"query": message, "thread_id": thread_id, "history": history,
-                     "events": [], "cost_usd": 0.0}, stream_mode=["updates", "custom"]):
-                if mode == "custom":
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                    continue
-                for node_name, delta in payload.items():
-                    for ev in (delta.get("events") or [])[seen:]:
-                        ev = {**ev, "node": node_name}
-                        yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                    if delta.get("events"):
-                        seen = len(delta["events"])
-                    if delta.get("final"):
-                        final = delta["final"]
-                    if delta.get("last_prompt"):
-                        last_prompt = delta["last_prompt"]
-            yield f"data: {json.dumps({'type': 'FinalAnswer', 'reply': final, 'prompt': last_prompt}, ensure_ascii=False)}\n\n"
-            deps.session_store.append(thread_id, "user", message)
-            deps.session_store.append(thread_id, "assistant", final)
-        yield "data: [DONE]\n\n"
+        async with lock:
+            deps = app.state.deps
+            try:
+                initial = _input_state(req.message, thread_id)
+                if deps.version != "v2":
+                    result = await run_v1(deps, req.message, thread_id, initial["history"])
+                    for ev in result["events"]:
+                        yield event(ev)
+                else:
+                    seen = 0
+                    result = dict(initial)
+                    async for mode, payload in app.state.graph.astream(
+                            initial, stream_mode=["updates", "custom"]):
+                        if mode == "custom":
+                            yield event(payload)
+                            continue
+                        for node_name, delta in payload.items():
+                            result.update(delta)
+                            for ev in (delta.get("events") or [])[seen:]:
+                                yield event({**ev, "node": node_name})
+                            if delta.get("events"):
+                                seen = len(delta["events"])
+                # 최종 이벤트 전에 저장해서 답변 직후 새로고침해도 복원한다.
+                deps.session_store.save_turn(thread_id, req.message, result)
+                yield event({"type": "FinalAnswer", "reply": result["final"],
+                             "prompt": result.get("last_prompt"), "saved": True})
+            except Exception:
+                # 연결 정보·API 키가 포함될 수 있는 예외 본문은 화면에 노출하지 않는다.
+                yield event({"type": "StreamError", "message": "처리에 실패했어요. 이 요청은 저장되지 않았어요. 서버 상태를 확인한 뒤 다시 보내 주세요."})
+            yield "data: [DONE]\n\n"
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,150 @@
+{
+  "source_root": "/Users/jangyueun/Downloads/SKALA/15주차/miniproject/all_total_vue_student",
+  "mode": "fixed inputs; fake LLM + recording MCP; real graph/API/SQLite",
+  "followup_correct": 10,
+  "followup_total": 10,
+  "checks_passed": 16,
+  "checks_total": 16,
+  "cases": [
+    {
+      "case": "후속 요청 1",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "payments-service"
+      ],
+      "actual": [
+        "payments-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 2",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "cache-service"
+      ],
+      "actual": [
+        "cache-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 3",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "auth-service"
+      ],
+      "actual": [
+        "auth-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 4",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "web-01"
+      ],
+      "actual": [
+        "web-01"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 5",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "log-service"
+      ],
+      "actual": [
+        "log-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 6",
+      "input": "그 서비스 다시 확인해줘",
+      "expected": [
+        "gateway-service"
+      ],
+      "actual": [
+        "gateway-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 7",
+      "input": "다시 확인해줘",
+      "expected": [
+        "payments-service"
+      ],
+      "actual": [
+        "payments-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 8",
+      "input": "그 서버 다시 조회해줘",
+      "expected": [
+        "payments-service"
+      ],
+      "actual": [
+        "payments-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 9",
+      "input": "재진단해줘",
+      "expected": [
+        "payments-service"
+      ],
+      "actual": [
+        "payments-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "후속 요청 10",
+      "input": "그 시스템 다시 진단해줘",
+      "expected": [
+        "payments-service"
+      ],
+      "actual": [
+        "payments-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "복수 대상 확인 요청",
+      "pass": true
+    },
+    {
+      "case": "확인 질문에 서비스명으로 답변",
+      "expected": [
+        "cache-service"
+      ],
+      "actual": [
+        "cache-service"
+      ],
+      "pass": true
+    },
+    {
+      "case": "새 대화에서 이전 대상 사용 차단",
+      "pass": true
+    },
+    {
+      "case": "저장 대화 복원 API",
+      "pass": true
+    },
+    {
+      "case": "API 재시작 후 메시지·대상 복원",
+      "pass": true
+    },
+    {
+      "case": "Ollama 기동 스크립트 DB 보존 정책",
+      "pass": true
+    }
+  ]
+}
