@@ -25,6 +25,7 @@ from pathlib import Path
 
 import httpx
 from langsmith import traceable
+from .validation import WRITING_RULES
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
@@ -216,7 +217,7 @@ class OpenAIQualityLLM(OpenAILLM):
         전달한다."""
         system = ("당신은 ICT 운영 보고 작성자다. 수집된 사실만 사용해 한국어로 "
                   "간결한 대응 보고를 작성하라. 반드시 '1) ... 2) ... 3) ...' 형식의 "
-                  "번호 절차로 답하고, 수치는 수집된 값을 그대로 인용하라.")
+                  "번호 절차로 답하고, 수치는 수집된 값을 그대로 인용하라." + WRITING_RULES)
         facts = []
         for c in collected:
             if c["source"] == "monitoring":

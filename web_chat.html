@@ -154,8 +154,11 @@ const STEP_LABELS = {
   TaskCompleted: e => (e.source === 'monitoring' ? `모니터링 새로 조회: ${e.target}${e.checked_at ? ' · ' + e.checked_at : ''}` : `대응 매뉴얼 조회: ${e.target}`) + (e.retries ? ' (재시도 성공)' : ''),
   ReplanCheck: e => e.is_sufficient ? null : `정보 부족 → ${e.target} 매뉴얼 추가 조사`,
   DraftWritten: e => `답변 초안 작성 (시도 ${e.attempt})`,
-  Validation: e => e.verdict.startsWith('합격') ? '검수 통과 (기본 형식 검사)' : '검수 반려 → 다시 작성',
-  Finalize: () => '최종 답변 완성',
+  Validation: e => e.status === 'failed' ? `검증 실패 (${e.attempt}회) · AI 초안 대신 조회 근거 안내` :
+    e.status === 'passed' ? '검수 통과 (CPU·메모리 수치와 지원 비교 표현 검사)' :
+    e.status === 'retry' ? `검수 반려 → 다시 작성: ${(e.issues || []).join(' / ')}` :
+    `${e.verdict} (이전 버전 검수 기록)`,
+  Finalize: e => e.validation_status === 'failed' ? '조회 근거 안내 완료' : '최종 답변 완성',
 };
 createApp({
   setup() {

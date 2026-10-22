@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 from langsmith import traceable
+from .validation import WRITING_RULES
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 
@@ -120,7 +121,10 @@ class OllamaLLM:
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
             "stream": True,
-            "options": {"temperature": 0.0},
+            # 검수 전 초안을 기다리는 시간이 과도해지지 않도록 사고 출력을 끄고
+            # 생성량을 제한한다. 제한으로 잘린 초안도 동일 검수를 거친다.
+            "think": False,
+            "options": {"temperature": 0.0, "num_predict": 1024},
         }
         chunks: list[str] = []
         usage = {"model": self.name, "tokens": 0, "usd": 0.0}
@@ -243,7 +247,7 @@ class OllamaQualityLLM(OllamaLLM):
               feedback: str | None, on_token=None) -> tuple[str, dict]:
         system = ("당신은 ICT 운영 보고 작성자다. 수집된 사실만 사용해 한국어로 "
                   "간결한 대응 보고를 작성하라. 반드시 '1) ... 2) ... 3) ...' 형식의 "
-                  "번호 절차로 답하고, 수치는 수집된 값을 그대로 인용하라.")
+                  "번호 절차로 답하고, 수치는 수집된 값을 그대로 인용하라." + WRITING_RULES)
         facts = []
         for c in collected:
             if c["source"] == "monitoring":

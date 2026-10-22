@@ -1,0 +1,218 @@
+{
+  "mode": "same fixed drafts and recorded monitoring evidence; no LLM benchmark",
+  "baseline": "e33a5d7 validate_node: length>=30 and numbered format",
+  "dataset_sha256": "1bfefecebfb9a66e022ccee0e91c7d2530fd97e41652930df283a972d0f92b1b",
+  "total": 20,
+  "error_cases": 13,
+  "valid_cases": 7,
+  "before_errors_blocked": 0,
+  "after_errors_blocked": 13,
+  "before_valid_accepted": 7,
+  "after_valid_accepted": 7,
+  "cases": [
+    {
+      "id": "valid-single",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) 로그 확인 필요. 3) 원인은 추가 조사하세요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-multiple",
+      "valid": true,
+      "multi": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) cache-service: CPU 42%, 메모리 87.8%. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-above",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 사용률이 80%를 초과합니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-below",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 90% 미만입니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-conditional",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 90%를 넘을 경우 추가 점검하세요. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-alert",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) 알림 원문 CPU 91% (threshold 80%)는 현재 측정값과 구분합니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "valid-equality",
+      "valid": true,
+      "draft": "1) payments-service: CPU 88.40%, 메모리 53.70%. 2) CPU 88.4% 이상입니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": true,
+      "issues": []
+    },
+    {
+      "id": "wrong-cpu",
+      "valid": false,
+      "draft": "1) payments-service: CPU 99%, 메모리 53.7%. 2) 원인 확인 필요. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 인용 오류: 실제 88.4%, 답변 99%",
+        "payments-service의 실제 CPU 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "wrong-memory",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 99%. 2) 원인 확인 필요. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service 메모리 인용 오류: 실제 53.7%, 답변 99%",
+        "payments-service의 실제 메모리 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "swapped-metrics",
+      "valid": false,
+      "draft": "1) payments-service: CPU 53.7%, 메모리 88.4%. 2) 원인 확인 필요. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 인용 오류: 실제 88.4%, 답변 53.7%",
+        "payments-service 메모리 인용 오류: 실제 53.7%, 답변 88.4%",
+        "payments-service의 실제 CPU 수치를 서비스명과 함께 명시하세요.",
+        "payments-service의 실제 메모리 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "swapped-services",
+      "valid": false,
+      "multi": true,
+      "draft": "1) payments-service: CPU 42%, 메모리 87.8%. 2) cache-service: CPU 88.4%, 메모리 53.7%. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 인용 오류: 실제 88.4%, 답변 42%",
+        "payments-service 메모리 인용 오류: 실제 53.7%, 답변 87.8%",
+        "cache-service CPU 인용 오류: 실제 42%, 답변 88.4%",
+        "cache-service 메모리 인용 오류: 실제 87.8%, 답변 53.7%",
+        "payments-service의 실제 CPU 수치를 서비스명과 함께 명시하세요.",
+        "payments-service의 실제 메모리 수치를 서비스명과 함께 명시하세요.",
+        "cache-service의 실제 CPU 수치를 서비스명과 함께 명시하세요.",
+        "cache-service의 실제 메모리 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "false-above-90",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 사용률이 90%를 초과한 상태에서 지속되고 있습니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 비교 오류: 실제 88.4%, '90% 초과'는 거짓입니다."
+      ]
+    },
+    {
+      "id": "false-below-80",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 80% 미만입니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 비교 오류: 실제 88.4%, '80% 미만'는 거짓입니다."
+      ]
+    },
+    {
+      "id": "false-exclusive",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 88.4% 초과입니다. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service CPU 비교 오류: 실제 88.4%, '88.4% 초과'는 거짓입니다."
+      ]
+    },
+    {
+      "id": "missing-memory",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%입니다. 2) 원인 확인 필요. 3) 로그 확인을 권장합니다.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "payments-service의 실제 메모리 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "unqueried-service",
+      "valid": false,
+      "draft": "1) billing-service: CPU 88.4%, 메모리 53.7%. 2) 정상 응답합니다. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "조회하지 않은 서비스 언급: billing-service",
+        "수치의 서비스명을 명확히 구분해야 합니다.",
+        "payments-service의 실제 CPU 수치를 서비스명과 함께 명시하세요.",
+        "payments-service의 실제 메모리 수치를 서비스명과 함께 명시하세요."
+      ]
+    },
+    {
+      "id": "missing-evidence",
+      "valid": false,
+      "empty": true,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) 원인 확인 필요. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "유효한 CPU·메모리 조회 근거가 없습니다."
+      ]
+    },
+    {
+      "id": "unsupported-log",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) 최근 로그 및 패턴 분석에서 특이한 요청 패턴 없음. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "로그 조회 근거가 없습니다. '로그 확인 필요'처럼 미확인 사항으로 표현하세요."
+      ]
+    },
+    {
+      "id": "unsupported-percent",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) 오류율 98%입니다. 3) 추가 조사 권장.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "서비스·지표 또는 근거를 확인할 수 없는 수치: 98%"
+      ]
+    },
+    {
+      "id": "invented-condition",
+      "valid": false,
+      "draft": "1) payments-service: CPU 88.4%, 메모리 53.7%. 2) CPU 97% 초과 시 추가 점검하세요. 3) 로그 확인 필요.",
+      "before_accepted": true,
+      "after_accepted": false,
+      "issues": [
+        "매뉴얼에 없는 조건 수치: CPU 97%"
+      ]
+    }
+  ]
+}

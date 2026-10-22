@@ -54,7 +54,9 @@ class SqliteSessionStore:
         if targets:
             context.update(last_targets=targets, pending=None)
         metadata = {"events": result.get("events", []), "prompt": result.get("last_prompt"),
-                    "targets": targets, "route": result.get("route")}
+                    "targets": targets, "route": result.get("route"),
+                    "validation_status": result.get("validation_status"),
+                    "validation_issues": result.get("validation_issues", [])}
         now = datetime.now(timezone.utc).isoformat()
         with self.conn:
             self.conn.executemany("INSERT INTO messages(thread_id,role,content,created,metadata) VALUES(?,?,?,?,?)", [
