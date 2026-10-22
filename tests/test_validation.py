@@ -75,11 +75,13 @@ class NumericValidationTests(unittest.TestCase):
         for cpu, valid in [(90.8, False), (91.0, False), (92.0, True)]:
             rows=collected(cpu=cpu,memory=54.9)
             rows[0]['data']['alerts']=['CPU 91% (threshold 80%)']
-            draft=(f'1) payments-service의 현재 CPU 사용률은 {cpu}%, 메모리 사용률은 54.9%로, '
-                   '알림에 기록된 CPU 91%를 넘는 상태를 확인함. 2) 로그 확인 필요.')
-            with self.subTest(cpu=cpu):
-                result=validate_answer(draft,rows)
-                self.assertEqual(result['ok'],valid,result['issues'])
+            for claim in ['CPU 91%를 넘는 상태', 'CPU 91% (threshold 80%)를 초과한 상태',
+                          'CPU 91% (threshold 80%)보다 높은 상태']:
+                draft=(f'1) payments-service의 현재 CPU 사용률은 {cpu}%, 메모리 사용률은 54.9%로, '
+                       f'알림에 기록된 {claim}를 확인함. 2) 로그 확인 필요.')
+                with self.subTest(cpu=cpu,claim=claim):
+                    result=validate_answer(draft,rows)
+                    self.assertEqual(result['ok'],valid,result['issues'])
         # 과거 알림 원문을 단순 인용하는 것은 현재 값과 달라도 허용한다.
         rows=collected(cpu=90.8,memory=54.9)
         rows[0]['data']['alerts']=['CPU 91% (threshold 80%)']

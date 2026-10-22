@@ -103,5 +103,13 @@
       "instance_id": 4514900560,
       "langsmith_run_id": "01a161ad-044b-7dcf-9b5c-2af7ac36f01c"
     }
-  }
+  },
+  "parenthetical_reply_recheck_after_final_fix": {
+    "ok": false,
+    "issues": [
+      "payments-service CPU 비교 오류: 실제 90.5%, '91% 초과'는 거짓입니다."
+    ],
+    "scope": "CPU/memory citation and supported comparisons"
+  },
+  "actual_model_run_after_fix_note": "첫 번째 수정으로 검사한 실제 모델 결과. 괄호 안 threshold 표기로 비교를 놓쳐 추가 수정했다. 최종 검사에서는 이 동일 답변도 반려한다."
 }
