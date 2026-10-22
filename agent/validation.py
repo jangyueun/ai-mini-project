@@ -82,12 +82,6 @@ def validate_answer(draft: str, collected: list[dict]) -> dict:
                     continue
                 d = facts[owner]
                 metric_name = "CPU" if field == "cpu_percent" else "메모리"
-                # 알림 원문은 현재 계측값과 구분하고, 해당 서비스 원문에 있는 값만 허용.
-                if re.search(r"알림|경고문|원문", prefix[-24:]):
-                    alert_values = {float(x) for x in PERCENT.findall(" ".join(d.get("alerts", [])))}
-                    if value not in alert_values:
-                        issues.append(f"{owner} 알림에 없는 수치: {value:g}%")
-                    continue
                 compare = COMPARISON.search(suffix)
                 conditional = bool(CONDITION.search(suffix[:25]) or "만약" in prefix[-10:])
                 if conditional:
@@ -102,6 +96,12 @@ def validate_answer(draft: str, collected: list[dict]) -> dict:
                              else actual < value if op == "미만" or op.startswith("낮") else actual > value)
                     if not valid:
                         issues.append(f"{owner} {metric_name} 비교 오류: 실제 {actual:g}%, '{value:g}% {op}'는 거짓입니다.")
+                    continue
+                # 알림 원문은 현재 계측값과 구분하고, 해당 서비스 원문에 있는 값만 허용.
+                if re.search(r"알림|경고문|원문", prefix[-24:]):
+                    alert_values = {float(x) for x in PERCENT.findall(" ".join(d.get("alerts", [])))}
+                    if value not in alert_values:
+                        issues.append(f"{owner} 알림에 없는 수치: {value:g}%")
                     continue
                 if not math.isclose(value, d[field], abs_tol=0.00001):
                     issues.append(f"{owner} {metric_name} 인용 오류: 실제 {d[field]:g}%, 답변 {value:g}%")

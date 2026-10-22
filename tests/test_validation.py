@@ -70,6 +70,21 @@ class NumericValidationTests(unittest.TestCase):
         self.assertFalse(validate_answer(answer()+' CPU 88.4%는 90% 임계값을 초과합니다.',rows)['ok'])
         self.assertTrue(validate_answer(answer(95.2)+' CPU 95.2%는 90% 임계값을 초과합니다.',collected(cpu=95.2)+rows[-1:])['ok'])
 
+    def test_alert_number_does_not_bypass_current_comparison(self):
+        # 사용자 실제 캡처: 90.8%인데 '알림에 기록된 CPU 91%를 넘는 상태'가 통과한 회귀.
+        for cpu, valid in [(90.8, False), (91.0, False), (92.0, True)]:
+            rows=collected(cpu=cpu,memory=54.9)
+            rows[0]['data']['alerts']=['CPU 91% (threshold 80%)']
+            draft=(f'1) payments-service의 현재 CPU 사용률은 {cpu}%, 메모리 사용률은 54.9%로, '
+                   '알림에 기록된 CPU 91%를 넘는 상태를 확인함. 2) 로그 확인 필요.')
+            with self.subTest(cpu=cpu):
+                result=validate_answer(draft,rows)
+                self.assertEqual(result['ok'],valid,result['issues'])
+        # 과거 알림 원문을 단순 인용하는 것은 현재 값과 달라도 허용한다.
+        rows=collected(cpu=90.8,memory=54.9)
+        rows[0]['data']['alerts']=['CPU 91% (threshold 80%)']
+        self.assertTrue(validate_answer(answer(90.8,54.9)+' 알림 원문 CPU 91%.',rows)['ok'])
+
 
 class ValidationAPITests(unittest.TestCase):
     def setUp(self):

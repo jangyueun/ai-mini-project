@@ -1,0 +1,107 @@
+{
+  "source": "사용자 2026-10-22 12:32:03 캡처의 실제 답변",
+  "draft": "1) **payments-service**의 현재 CPU 사용률은 **90.8%**, 메모리 사용률은 **54.9%**로, 알림에 기록된 CPU 91%를 넘는 상태를 확인함.\n2) CPU 사용률이 임계값(80%)을 넘고 지속 중인 것으로 판단되어, 오토스케일링 그룹에서 인스턴스를 한 대 더 띄우는 조치를 수행해야 함.\n3) 알림에 따르면 payments-service-3 instance responding slow라는 문제가 발생했으므로, 해당 인스턴스의 성능 문제를 확인하고, 로그 확인 필요.",
+  "monitoring": {
+    "system_name": "payments-service",
+    "status": "degraded",
+    "cpu_percent": 90.8,
+    "memory_percent": 54.9,
+    "alerts": [
+      "CPU 91% (threshold 80%)",
+      "payments-service-3 instance responding slow"
+    ]
+  },
+  "validation": {
+    "ok": false,
+    "issues": [
+      "payments-service CPU 비교 오류: 실제 90.8%, '91% 넘는'는 거짓입니다."
+    ],
+    "scope": "CPU/memory citation and supported comparisons"
+  },
+  "actual_model_run_after_fix": {
+    "reply": "1) **payments-service**의 현재 CPU 사용률은 **90.5%**, 메모리 사용률은 **54.7%**로, 알림에 기록된 **CPU 91% (threshold 80%)**를 초과하여 **임계값을 넘은 상태**로 판단됨.  \n2) **payments-service-3 instance**가 **응답이 느려지는 문제**로, 해당 인스턴스의 CPU/메모리 사용률이 확인되지 않으나, **로그 확인 필요**로 판단됨.  \n3) **CPU 급증 원인**으로 **특이 패턴 없음**으로 확인되었으나, **반복 호출, 배치 작업 중복 실행** 등 특정 요청 패턴이 원인일 가능성 있으므로, **로그 확인 필요**로 안내됨.",
+    "events": [
+      {
+        "type": "RouteDecided",
+        "route": "incident"
+      },
+      {
+        "type": "PlanCreated",
+        "task_count": 2,
+        "targets": [
+          "payments-service"
+        ]
+      },
+      {
+        "type": "GateApplied",
+        "removed_analysis_tasks": 0
+      },
+      {
+        "type": "TaskCompleted",
+        "id": "task-0",
+        "source": "monitoring",
+        "target": "payments-service",
+        "retries": 1,
+        "checked_at": "2026-10-22T12:34:53.561050"
+      },
+      {
+        "type": "ReplanCheck",
+        "round": 0,
+        "is_sufficient": false,
+        "gap_task": "task-gap-runbook",
+        "target": "cpu-spike"
+      },
+      {
+        "type": "TaskCompleted",
+        "id": "task-gap-runbook",
+        "source": "runbook",
+        "target": "cpu-spike",
+        "retries": 0,
+        "checked_at": null
+      },
+      {
+        "type": "ReplanCheck",
+        "round": 1,
+        "is_sufficient": true
+      },
+      {
+        "type": "AnalysisCompleted",
+        "length": 9
+      },
+      {
+        "type": "DraftWritten",
+        "attempt": 1,
+        "length": 350
+      },
+      {
+        "type": "Validation",
+        "attempt": 1,
+        "verdict": "합격",
+        "status": "passed",
+        "issues": [],
+        "scope": "CPU/memory citation and supported comparisons"
+      },
+      {
+        "type": "Finalize",
+        "pipeline": "incident-v2",
+        "validation_status": "passed"
+      }
+    ],
+    "metadata": {
+      "route": "incident",
+      "task_count": 3,
+      "gate_removed": 0,
+      "replan_rounds": 1,
+      "retry_count": 1,
+      "parallel_elapsed": 0.36,
+      "validation_attempts": 1,
+      "validation_status": "passed",
+      "validation_issues": [],
+      "cost_usd": 0.004044,
+      "llm_backend": "ollama",
+      "supervisor_version": "v2",
+      "instance_id": 4514900560,
+      "langsmith_run_id": "01a161ad-044b-7dcf-9b5c-2af7ac36f01c"
+    }
+  }
+}
